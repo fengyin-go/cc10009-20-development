@@ -60,6 +60,33 @@ npm run build
 | 数据分发 | `export` | 分发通道 | 通道编号、输出数据集、目标系统 |
 | RPA流程 | `rpaflow` | 自动化流程 | 流程编号、目标页面、操作序列 |
 | 登录凭证 | `auth` | 凭证配置 | 凭证编号、目标站点、认证方式 |
+| 模板版本契约 | `contract` | 模板版本/字段映射契约 | 入口地址、列表选择器、分页规则差异、契约编号、绑定版本 |
+
+## 模板版本兼容检查与字段映射契约
+
+抽取模板（网页模板）改版后，旧入口地址、列表选择器可能不再兼容，字段映射无法判断该引用哪一版。
+`src/domain/contract/` 沿「版本校验 → 契约发布 → 字段映射绑定 → 解析引用」的调用链实现：
+
+- **版本兼容校验**：每次校验逐项记录入口地址、列表选择器、分页规则与上一已发布版本的差异
+  （一致 / 可迁移 / 不兼容），通过后形成可引用的模板版本（`service.ts#validateTemplateVersion`）。
+- **并发发布事务**：同一抽取模板同时只允许一个版本成为当前版本；提交异常回滚到上一当前版本并保留差异记录，
+  历史版本发布后即只读（`service.ts#publishTemplateVersion`）。
+- **字段映射契约**：字段映射启用必须绑定一个已通过校验的版本；契约发布结果同步回写字段映射清单，
+  全平台仅保留一套契约版本（`service.ts#bindFieldContract / publishContract`）。
+- **冲突仲裁**：不同版本字段映射冲突时由校验结果给出明确优先级，旧模板记录保持只读、不自动覆盖
+  （`service.ts#registerConflictsForPublish`）。
+- **存量迁移回填**：旧模板先在本地开发环境兼容构建，回填新版本时保留原入口地址与字段映射依据，
+  差异按「可迁移」处理，避免上线后出现两套契约（`service.ts#createMigrationTask / completeMigration`）。
+- **解析引用**：解析结果页明确标注本次解析使用的契约编号与模板版本，无已发布契约则拒绝解析
+  （`service.ts#runParse`）。
+
+领域数据独立持久化在 `localStorage` 的 `scraper-config-studio:contract-state`，与通用清单数据隔离。
+
+```bash
+cd frontend
+npm run verify:contract   # 内存版 localStorage 驱动的 38 项领域逻辑断言
+```
+
 
 ## 约定
 

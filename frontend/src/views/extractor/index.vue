@@ -7,6 +7,7 @@
       </div>
       <div class="page-actions">
         <button class="btn primary" type="button" @click="openCreate">登记映射规则</button>
+        <RouterLink class="btn" to="/contract">模板版本契约工作台</RouterLink>
         <button class="btn" type="button" @click="exportRows">导出字段映射清单</button>
       </div>
     </header>
@@ -37,6 +38,9 @@
       <thead>
         <tr>
           <th v-for="column in columns" :key="column">{{ column }}</th>
+          <th>契约编号</th>
+          <th>绑定模板版本</th>
+          <th>契约状态</th>
           <th>当前状态</th>
           <th>可执行动作</th>
         </tr>
@@ -44,6 +48,12 @@
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)">
           <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
+          <td>{{ row['契约编号'] ?? '—' }}</td>
+          <td>{{ row['绑定模板版本'] ?? '未绑定' }}</td>
+          <td>
+            <span v-if="row['契约状态']" class="contract-badge">{{ row['契约状态'] }}</span>
+            <span v-else class="muted">待发布契约</span>
+          </td>
           <td>{{ row.status }}</td>
           <td class="row-actions">
             <button
@@ -58,10 +68,14 @@
           </td>
         </tr>
         <tr v-if="!rows.length">
-          <td :colspan="columns.length + 2" class="empty-state">暂无字段映射数据，可先登记映射规则</td>
+          <td :colspan="columns.length + 5" class="empty-state">暂无字段映射数据，可先登记映射规则</td>
         </tr>
       </tbody>
     </table>
+
+    <p class="contract-tip">
+      契约约束：字段映射启用前必须在「模板版本契约工作台」绑定一个已通过兼容校验的模板版本，发布结果会同步回写本清单，全平台仅保留一套契约版本。
+    </p>
 
     <footer class="page-foot">
       <span>共 {{ total }} 条字段映射记录</span>
@@ -114,6 +128,11 @@ function openCreate() {
 
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
+  // 契约约束：启用映射规则前必须已绑定并发布一个通过校验的模板版本契约。
+  if (action === '启用规则' && row['契约状态'] !== '已发布') {
+    errorMessage.value = `映射规则 ${String(row['规则编号'])} 尚未绑定已通过校验的模板版本契约，请先到「模板版本契约工作台」完成绑定与发布。`
+    return
+  }
   const result = applyAction(meta.key, Number(row.id), action)
   if (!result.ok) {
     errorMessage.value = result.message
@@ -135,3 +154,25 @@ function reload() {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.contract-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 12px;
+  background: #ecfdf3;
+  color: #027a48;
+  white-space: nowrap;
+}
+.muted { color: var(--muted); }
+.contract-tip {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #b54708;
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+</style>
